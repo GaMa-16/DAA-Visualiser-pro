@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "Patrick Hand", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Kalam", cursive;
+  
+  --color-paper: #fdfbf7;
+  --color-pencil: #2d2d2d;
+  --color-muted-paper: #e5e0d8;
+  --color-marker-red: #ff4d4d;
+  --color-pen-blue: #2d5da1;
+  --color-postit-yellow: #fff9c4;
+  --color-marker-blue: #4d94ff;
+
+  --shadow-hard: 4px 4px 0px 0px #2d2d2d;
+  --shadow-hard-lg: 8px 8px 0px 0px #2d2d2d;
+  --shadow-hard-sm: 2px 2px 0px 0px #2d2d2d;
+
+  --dark-shadow-hard: 4px 4px 0px 0px #fdfbf7;
+  --dark-shadow-hard-lg: 8px 8px 0px 0px #fdfbf7;
+  --dark-shadow-hard-sm: 2px 2px 0px 0px #fdfbf7;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    @apply bg-paper text-pencil font-sans selection:bg-marker-red/30 transition-colors duration-300;
+    background-image: radial-gradient(#e5e0d8 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .dark body {
+    @apply bg-pencil text-paper;
+    background-image: radial-gradient(#3d3d3d 1px, transparent 1px);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading font-bold;
+  }
+}
+
+@layer utilities {
+  .dark .shadow-hard {
+    box-shadow: var(--dark-shadow-hard);
+  }
+  .dark .shadow-hard-lg {
+    box-shadow: var(--dark-shadow-hard-lg);
+  }
+  .dark .shadow-hard-sm {
+    box-shadow: var(--dark-shadow-hard-sm);
+  }
+  .dark .border-pencil {
+    border-color: var(--color-paper);
+  }
+
+  .dark .bg-white {
+    background-color: #1a1a1a;
+  }
+
+  .dark .bg-paper {
+    background-color: #2d2d2d;
+  }
+
+  .dark .bg-muted-paper {
+    background-color: #3d3d3d;
+  }
+
+  .dark .bg-postit-yellow {
+    background-color: #4d4a30;
+  }
+
+  .dark .text-pencil {
+    color: #fdfbf7;
+  }
+
+  .dark .text-pencil\/60 {
+    color: rgba(253, 251, 247, 0.6);
+  }
+
+  .dark .text-pencil\/40 {
+    color: rgba(253, 251, 247, 0.4);
+  }
+}
+
+@layer utilities {
+  .wobbly-border {
+    border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+  }
+  
+  .wobbly-border-md {
+    border-radius: 15px 225px 15px 255px / 255px 15px 225px 15px;
+  }
+
+  .wobbly-border-sm {
+    border-radius: 120px 10px 100px 10px / 10px 100px 10px 120px;
+  }
+}
