@@ -21,6 +21,9 @@ export const GreedyVisualizer: React.FC<GreedyVisualizerProps> = ({ algorithm })
 
   // Huffman State
   const [text, setText] = useState("DAA VISUALIZER");
+  const [huffmanSteps, setHuffmanSteps] = useState<any[]>([]);
+  const [currentHuffmanStep, setCurrentHuffmanStep] = useState(0);
+  const [huffmanCodes, setHuffmanCodes] = useState<any>(null);
 
   // MST State (Graph)
   const [nodes, setNodes] = useState([
@@ -99,23 +102,122 @@ export const GreedyVisualizer: React.FC<GreedyVisualizerProps> = ({ algorithm })
   };
 
   const solveHuffman = () => {
+    if (!text) return;
     const freq: { [key: string]: number } = {};
     for (const char of text) freq[char] = (freq[char] || 0) + 1;
-    
-    const newSteps: string[] = ["Calculating character frequencies."];
-    Object.entries(freq).forEach(([char, f]) => newSteps.push(`'${char}': ${f}`));
 
-    newSteps.push("Building Huffman Tree (Greedy: always pick 2 smallest frequencies).");
-    // Simplified logic for visualization
-    const bruteForceBits = text.length * 8; // Assuming 8-bit ASCII
-    const huffmanBits = text.length * 3; // Mock average for visualization
-    
-    newSteps.push(`Brute Force Encoding (8-bit): ${bruteForceBits} bits`);
-    newSteps.push(`Huffman Encoding (Variable): ~${huffmanBits} bits`);
-    newSteps.push(`Compression Ratio: ${((1 - huffmanBits/bruteForceBits) * 100).toFixed(1)}%`);
-    
-    setResult({ bruteForceBits, huffmanBits });
-    setSteps(newSteps);
+    let leaves = Object.entries(freq).map(([char, f]) => ({
+      id: `leaf-${char === ' ' ? 'Space' : char}`,
+      char: char === ' ' ? 'Space' : char,
+      freq: f,
+      isLeaf: true
+    })).sort((a, b) => a.freq - b.freq || a.char.localeCompare(b.char));
+
+    let forest: any[] = [...leaves];
+    const sequence: any[] = [];
+
+    const cloneNode = (node: any): any => ({
+      ...node,
+      left: node.left ? cloneNode(node.left) : undefined,
+      right: node.right ? cloneNode(node.right) : undefined
+    });
+
+    sequence.push({
+      forest: forest.map(cloneNode),
+      merging: [],
+      newId: null,
+      desc: "Initial state: Distinct characters ready to be merged."
+    });
+
+    let internalId = 0;
+    while (forest.length > 1) {
+      forest.sort((a, b) => a.freq - b.freq || (a.char || a.id).localeCompare(b.char || b.id));
+
+      const left = forest[0];
+      const right = forest[1];
+
+      sequence.push({
+        forest: forest.map(cloneNode),
+        merging: [left.id, right.id],
+        newId: null,
+        desc: `Highlighting nodes with lowest frequencies: ${left.char || left.freq} and ${right.char || right.freq}`
+      });
+
+      const newNode = {
+        id: `node-${internalId++}`,
+        char: '',
+        freq: left.freq + right.freq,
+        left,
+        right,
+        isLeaf: false
+      };
+
+      forest = [newNode, ...forest.slice(2)];
+
+      sequence.push({
+        forest: forest.map(cloneNode),
+        merging: [],
+        newId: newNode.id,
+        desc: `Merged into new parent node with frequency ${newNode.freq}`
+      });
+    }
+
+    const root = forest[0];
+    const allCoords: { [id: string]: { x: number, y: number } } = {};
+
+    const assignCoords = (node: any, leftBound: number, rightBound: number, depth: number) => {
+      if (!node) return;
+      const x = (leftBound + rightBound) / 2;
+      const y = 40 + depth * 60;
+      allCoords[node.id] = { x, y };
+
+      if (!node.isLeaf) {
+        assignCoords(node.left, leftBound, x, depth + 1);
+        assignCoords(node.right, x, rightBound, depth + 1);
+      }
+    };
+
+    if (root) assignCoords(root, 20, 580, 0);
+
+    const attachCoords = (nodes: any[]) => {
+      nodes.forEach(n => {
+        if (allCoords[n.id]) {
+          n.x = allCoords[n.id].x;
+          n.y = allCoords[n.id].y;
+        }
+        if (n.left) attachCoords([n.left]);
+        if (n.right) attachCoords([n.right]);
+      });
+    };
+
+    sequence.forEach(seq => attachCoords(seq.forest));
+
+    const codes: { [key: string]: string } = {};
+    const getCodes = (node: any, path: string) => {
+      if (!node) return;
+      if (node.isLeaf) codes[node.char] = path;
+      getCodes(node.left, path + '0');
+      getCodes(node.right, path + '1');
+    };
+    getCodes(root, '');
+
+    const getMaxDepth = (node: any): number => {
+      if (!node) return 0;
+      return 1 + Math.max(getMaxDepth(node.left), getMaxDepth(node.right));
+    };
+    const maxDepth = getMaxDepth(root);
+    const reqHeight = Math.max(300, 40 + maxDepth * 60 + 40);
+
+    const bruteForceBits = text.length * 8;
+    let huffmanBits = 0;
+    for (const char of text) {
+      huffmanBits += codes[char === ' ' ? 'Space' : char]?.length || 0;
+    }
+
+    setResult({ bruteForceBits, huffmanBits, svgHeight: reqHeight });
+    setHuffmanCodes(codes);
+    setHuffmanSteps(sequence);
+    setCurrentHuffmanStep(0);
   };
 
   const solveKruskal = () => {
@@ -245,18 +347,94 @@ export const GreedyVisualizer: React.FC<GreedyVisualizerProps> = ({ algorithm })
             </div>
           )}
           {algorithm === 'huffman-coding' && (
-            <div className="space-y-6 text-center">
-              <div className="flex gap-8 justify-center">
-                <div className="p-4 border-2 border-pencil wobbly-border-sm bg-white">
-                  <span className="text-xs font-bold block uppercase">Brute Force</span>
-                  <span className="text-3xl font-heading">{result?.bruteForceBits} bits</span>
+            <div className="w-full h-80 relative flex items-center justify-center p-2">
+              {huffmanSteps.length > 0 && currentHuffmanStep === huffmanSteps.length - 1 ? (
+                <div className="space-y-6 text-center animate-in fade-in duration-500">
+                  <div className="flex gap-8 justify-center">
+                    <div className="p-4 border-2 border-pencil wobbly-border-sm bg-white">
+                      <span className="text-xs font-bold block uppercase">Brute Force</span>
+                      <span className="text-3xl font-heading">{result?.bruteForceBits} bits</span>
+                    </div>
+                    <div className="p-4 border-2 border-pencil wobbly-border-sm bg-postit-yellow">
+                      <span className="text-xs font-bold block uppercase">Huffman</span>
+                      <span className="text-3xl font-heading">{result?.huffmanBits} bits</span>
+                    </div>
+                  </div>
+                  <p className="text-xl font-heading text-marker-red">Saved {result?.bruteForceBits - result?.huffmanBits} bits!</p>
                 </div>
-                <div className="p-4 border-2 border-pencil wobbly-border-sm bg-postit-yellow">
-                  <span className="text-xs font-bold block uppercase">Huffman</span>
-                  <span className="text-3xl font-heading">{result?.huffmanBits} bits</span>
+              ) : (
+                <div className="w-full h-full relative overflow-hidden bg-white border-2 border-dashed border-pencil/20">
+                  <svg className="w-full h-full" viewBox={`0 0 600 ${result?.svgHeight || 300}`} preserveAspectRatio="xMidYMid meet">
+                    {/* Render Lines */}
+                    {(huffmanSteps[currentHuffmanStep]?.forest || []).map((tree: any) => {
+                      const drawEdges = (node: any): any => {
+                        if (!node) return null;
+                        const edges = [];
+                        if (node.left) {
+                          edges.push(
+                            <g key={`edge-l-${node.id}`}>
+                              <path 
+                                d={`M ${node.x} ${node.y} Q ${node.x} ${node.y + 20} ${node.left.x} ${node.left.y}`} 
+                                stroke="#1e1e1e" strokeWidth="2" fill="none" opacity="0.6"
+                                strokeDasharray="4 2"
+                              />
+                              <text x={(node.x + node.left.x) / 2 - 10} y={(node.y + node.left.y) / 2} fill="#ef4444" className="font-heading font-bold text-sm">0</text>
+                            </g>
+                          );
+                          edges.push(drawEdges(node.left));
+                        }
+                        if (node.right) {
+                          edges.push(
+                            <g key={`edge-r-${node.id}`}>
+                              <path 
+                                d={`M ${node.x} ${node.y} Q ${node.x} ${node.y + 20} ${node.right.x} ${node.right.y}`} 
+                                stroke="#1e1e1e" strokeWidth="2" fill="none" opacity="0.6"
+                                strokeDasharray="4 2"
+                              />
+                              <text x={(node.x + node.right.x) / 2 + 10} y={(node.y + node.right.y) / 2} fill="#ef4444" className="font-heading font-bold text-sm">1</text>
+                            </g>
+                          );
+                          edges.push(drawEdges(node.right));
+                        }
+                        return edges;
+                      };
+                      return drawEdges(tree);
+                    })}
+                    
+                    {/* Render Nodes */}
+                    {(huffmanSteps[currentHuffmanStep]?.forest || []).map((tree: any) => {
+                      const drawNodes = (node: any): any => {
+                        if (!node) return null;
+                        const isMerging = huffmanSteps[currentHuffmanStep]?.merging?.includes(node.id);
+                        const isNew = huffmanSteps[currentHuffmanStep]?.newId === node.id;
+                        
+                        return (
+                          <g key={`node-${node.id}`} className="transition-all duration-300">
+                            {isMerging && (
+                              <circle cx={node.x} cy={node.y} r="22" stroke="#ef4444" strokeWidth="3" fill="none" strokeDasharray="8 4" className="animate-spin-slow" />
+                            )}
+                            <circle 
+                              cx={node.x} cy={node.y} r={node.isLeaf ? "18" : "15"} 
+                              className={`stroke-pencil stroke-2 transition-all ${isNew ? 'fill-postit-yellow' : node.isLeaf ? 'fill-white' : 'fill-slate-100'}`} 
+                            />
+                            <text x={node.x} y={node.y - (node.isLeaf ? 2 : 0)} textAnchor="middle" dy=".3em" fontSize={node.isLeaf ? "14" : "10"} className="fill-pencil font-bold">
+                              {node.isLeaf ? node.char : node.freq}
+                            </text>
+                            {node.isLeaf && (
+                              <text x={node.x} y={node.y + 24} textAnchor="middle" fontSize="10" className="fill-pencil/70 font-bold">
+                                {node.freq}
+                              </text>
+                            )}
+                            {node.left && drawNodes(node.left)}
+                            {node.right && drawNodes(node.right)}
+                          </g>
+                        );
+                      };
+                      return drawNodes(tree);
+                    })}
+                  </svg>
                 </div>
-              </div>
-              <p className="text-xl font-heading text-marker-red">Saved {result?.bruteForceBits - result?.huffmanBits} bits!</p>
+              )}
             </div>
           )}
           {(algorithm.includes('mst')) && (
@@ -307,27 +485,85 @@ export const GreedyVisualizer: React.FC<GreedyVisualizerProps> = ({ algorithm })
           )}
         </WobblyCard>
 
-        <WobblyCard variant="yellow" decoration="tape">
-          <h3 className="text-2xl font-heading mb-4">Greedy Trace</h3>
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar mb-4">
-            {algorithm.includes('mst') ? (
-              <p className="text-xl italic">"{currentMstData.desc}"</p>
-            ) : (
-              steps.map((s, i) => (
-                <p key={i} className="text-lg border-b border-pencil/10 pb-1">
-                  <span className="font-bold text-pen-blue mr-2">{i+1}.</span> {s}
-                </p>
-              ))
-            )}
-          </div>
-          {algorithm.includes('mst') && (
-            <div className="flex justify-between items-center">
-              <WobblyButton size="sm" onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}>Prev</WobblyButton>
-              <span className="font-bold">{currentStep + 1} / {mstSteps.length}</span>
-              <WobblyButton size="sm" onClick={() => setCurrentStep(Math.min(mstSteps.length - 1, currentStep + 1))}>Next</WobblyButton>
+        {algorithm === 'huffman-coding' && huffmanSteps.length > 0 && currentHuffmanStep === huffmanSteps.length - 1 ? (
+          <WobblyCard variant="yellow" decoration="tape">
+            <h3 className="text-2xl font-heading mb-4">Huffman Encoding Table</h3>
+            <div className="max-h-60 overflow-y-auto pr-2 custom-scrollbar mb-4 border-2 border-pencil bg-white">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-pencil text-white">
+                    <th className="p-2 border border-pencil font-heading uppercase text-sm">Character</th>
+                    <th className="p-2 border border-pencil font-heading uppercase text-sm">Frequency</th>
+                    <th className="p-2 border border-pencil font-heading uppercase text-sm">Code</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(huffmanCodes || {}).map(([char, code]: any, i) => {
+                    const node = huffmanSteps?.[0]?.forest?.find((n: any) => n.char === char);
+                    return (
+                      <tr key={i} className="hover:bg-slate-50 transition-colors">
+                        <td className="p-2 border border-pencil font-bold text-center">
+                          {char === 'Space' ? '˽' : char}
+                        </td>
+                        <td className="p-2 border border-pencil text-center">{node?.freq || 0}</td>
+                        <td className="p-2 border border-pencil font-mono font-bold text-marker-red text-center">{code}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-        </WobblyCard>
+            <div className="flex justify-between items-center mt-4">
+              <WobblyButton size="sm" onClick={() => setCurrentHuffmanStep(0)}>Rebuild Tree</WobblyButton>
+            </div>
+          </WobblyCard>
+        ) : (
+          <WobblyCard variant="yellow" decoration="tape">
+            <h3 className="text-2xl font-heading mb-4">Greedy Trace</h3>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar mb-4">
+              {algorithm.includes('mst') ? (
+                <p className="text-xl italic">"{currentMstData.desc}"</p>
+              ) : algorithm === 'huffman-coding' ? (
+                <p className="text-xl italic leading-relaxed">
+                  "{huffmanSteps[currentHuffmanStep]?.desc}"
+                </p>
+              ) : (
+                steps.map((s, i) => (
+                  <p key={i} className="text-lg border-b border-pencil/10 pb-1">
+                    <span className="font-bold text-pen-blue mr-2">{i+1}.</span> {s}
+                  </p>
+                ))
+              )}
+            </div>
+            {(algorithm.includes('mst') || algorithm === 'huffman-coding') && (
+              <div className="flex justify-between items-center bg-white border-2 border-pencil p-2 mt-4">
+                <WobblyButton 
+                  size="sm" 
+                  onClick={() => algorithm === 'huffman-coding' 
+                    ? setCurrentHuffmanStep(Math.max(0, currentHuffmanStep - 1)) 
+                    : setCurrentStep(Math.max(0, currentStep - 1))}
+                  disabled={(algorithm === 'huffman-coding' ? currentHuffmanStep : currentStep) === 0}
+                >
+                  Prev
+                </WobblyButton>
+                <span className="font-bold font-heading">
+                  {algorithm === 'huffman-coding' 
+                    ? `${currentHuffmanStep + 1} / ${huffmanSteps.length}` 
+                    : `${currentStep + 1} / ${mstSteps.length}`}
+                </span>
+                <WobblyButton 
+                  size="sm" 
+                  onClick={() => algorithm === 'huffman-coding'
+                    ? setCurrentHuffmanStep(Math.min(huffmanSteps.length - 1, currentHuffmanStep + 1))
+                    : setCurrentStep(Math.min(mstSteps.length - 1, currentStep + 1))}
+                  disabled={(algorithm === 'huffman-coding' ? currentHuffmanStep === huffmanSteps.length - 1 : currentStep === mstSteps.length - 1)}
+                >
+                  {algorithm === 'huffman-coding' && currentHuffmanStep !== huffmanSteps.length - 1 ? 'Step Forward' : 'Next'}
+                </WobblyButton>
+              </div>
+            )}
+          </WobblyCard>
+        )}
       </div>
 
       {/* Expanded View Modal */}

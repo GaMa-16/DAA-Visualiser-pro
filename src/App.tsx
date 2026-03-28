@@ -45,7 +45,6 @@ import { useEffect } from 'react';
 
 type Module = 'fundamentals' | 'divide-conquer' | 'greedy' | 'dynamic-programming' | 'optimization' | 'backtracking' | 'branch-bound' | 'graphs' | 'randomized' | 'complexity' | 'sandbox';
 
-import { ChatBot } from './components/ChatBot';
 
 export default function App() {
   const [activeModule, setActiveModule] = useState<Module>('fundamentals');
@@ -438,7 +437,6 @@ export default function App() {
           <circle cx="190" cy="190" r="5" fill="currentColor" />
         </svg>
       </div>
-      <ChatBot />
     </div>
   );
 }

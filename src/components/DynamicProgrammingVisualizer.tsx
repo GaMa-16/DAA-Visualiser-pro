@@ -113,8 +113,82 @@ export const DynamicProgrammingVisualizer: React.FC<DPVisualizerProps> = ({ algo
       }
     }
 
+    let i_bk = m;
+    let j_bk = n;
+    let lcsStr = "";
+    const backtrackPath = [[i_bk, j_bk]];
+    const lcsChars = [];
+
+    newVisualSteps.push({
+      table: JSON.parse(JSON.stringify(dp)),
+      description: "DP table completed. Starting backtracking from bottom-right corner...",
+      highlights: [],
+      current: [i_bk, j_bk],
+      formula: "Start Backtracking phase",
+      backtrackPath: [...backtrackPath],
+      lcsChars: [...lcsChars],
+      isBacktracking: true
+    });
+
+    while (i_bk > 0 && j_bk > 0) {
+      if (str1[i_bk - 1] === str2[j_bk - 1]) {
+        lcsStr = str1[i_bk - 1] + lcsStr;
+        lcsChars.push([i_bk, j_bk, str1[i_bk - 1]]);
+        newVisualSteps.push({
+          table: JSON.parse(JSON.stringify(dp)),
+          description: `Characters match! Adding '${str1[i_bk - 1]}' to LCS and moving diagonally.`,
+          highlights: [],
+          current: [i_bk - 1, j_bk - 1],
+          formula: `str1[${i_bk - 1}] == str2[${j_bk - 1}]. Match found!`,
+          backtrackPath: [...backtrackPath],
+          lcsChars: [...lcsChars],
+          isBacktracking: true
+        });
+        i_bk--;
+        j_bk--;
+        backtrackPath.push([i_bk, j_bk]);
+      } else if (dp[i_bk - 1][j_bk] > dp[i_bk][j_bk - 1]) {
+        newVisualSteps.push({
+          table: JSON.parse(JSON.stringify(dp)),
+          description: `Values are different. Moving up because dp[${i_bk - 1}][${j_bk}] > dp[${i_bk}][${j_bk - 1}].`,
+          highlights: [[i_bk - 1, j_bk], [i_bk, j_bk - 1]],
+          current: [i_bk - 1, j_bk],
+          formula: `max(${dp[i_bk - 1][j_bk]}, ${dp[i_bk][j_bk - 1]}) = Move Up`,
+          backtrackPath: [...backtrackPath],
+          lcsChars: [...lcsChars],
+          isBacktracking: true
+        });
+        i_bk--;
+        backtrackPath.push([i_bk, j_bk]);
+      } else {
+        newVisualSteps.push({
+          table: JSON.parse(JSON.stringify(dp)),
+          description: `Values are different. Moving left because dp[${i_bk - 1}][${j_bk}] <= dp[${i_bk}][${j_bk - 1}].`,
+          highlights: [[i_bk - 1, j_bk], [i_bk, j_bk - 1]],
+          current: [i_bk, j_bk - 1],
+          formula: `max(${dp[i_bk - 1][j_bk]}, ${dp[i_bk][j_bk - 1]}) = Move Left`,
+          backtrackPath: [...backtrackPath],
+          lcsChars: [...lcsChars],
+          isBacktracking: true
+        });
+        j_bk--;
+        backtrackPath.push([i_bk, j_bk]);
+      }
+    }
+
+    newVisualSteps.push({
+      table: JSON.parse(JSON.stringify(dp)),
+      description: `Backtracking complete! The longest common subsequence is "${lcsStr}" with length ${dp[m][n]}.`,
+      highlights: [],
+      current: [0, 0],
+      formula: `LCS String: "${lcsStr}"`,
+      backtrackPath: [...backtrackPath],
+      lcsChars: [...lcsChars],
+      isBacktracking: true
+    });
+
     setVisualSteps(newVisualSteps);
-    setResult({ length: dp[m][n] });
+    setResult({ length: dp[m][n], sequence: lcsStr });
     setCurrentStepIdx(0);
   };
 
@@ -268,16 +342,20 @@ export const DynamicProgrammingVisualizer: React.FC<DPVisualizerProps> = ({ algo
                       {(algorithm === 'matrix-chain' || algorithm === 'obst') && i}
                     </th>
                     {row.map((cell, j) => {
-                      const isHighlighted = currentVisual.highlights.some((h: any) => h[0] === i && h[1] === j);
+                      const isHighlighted = currentVisual.highlights?.some((h: any) => h[0] === i && h[1] === j);
                       const isCurrent = currentVisual.current?.[0] === i && currentVisual.current?.[1] === j;
+                      const isBacktrack = currentVisual.backtrackPath?.some((h: any) => h[0] === i && h[1] === j);
+                      const isLcsChar = currentVisual.lcsChars?.some((h: any) => h[0] === i && h[1] === j);
                       const isEmpty = (algorithm === 'matrix-chain' || algorithm === 'obst') && i > j;
                       
                       return (
                         <td 
                           key={j} 
-                          className={`border-2 border-pencil p-2 text-center transition-all duration-300 ${
+                          className={`border-2 border-pencil p-2 text-center transition-all duration-300 relative ${
                             isEmpty ? 'bg-pencil/5 text-transparent' :
-                            isCurrent ? 'bg-marker-red text-white scale-110 z-10 shadow-hard-sm' : 
+                            isCurrent ? 'bg-marker-red text-white scale-110 z-10 shadow-hard-sm rounded-sm' : 
+                            isLcsChar ? 'bg-pen-blue/20 ring-4 ring-marker-red animate-pulse z-20 font-bold' :
+                            isBacktrack ? 'bg-pen-blue/30 scale-105 z-10' :
                             isHighlighted ? 'bg-postit-yellow' : ''
                           }`}
                         >
@@ -291,6 +369,18 @@ export const DynamicProgrammingVisualizer: React.FC<DPVisualizerProps> = ({ algo
             </table>
           </div>
         </WobblyCard>
+
+        {algorithm === 'lcs' && currentVisual.isBacktracking && currentStepIdx === visualSteps.length - 1 && (
+          <WobblyCard variant="white" decoration="tape" className="mt-8 border-4 border-pen-blue bg-emerald-50 max-w-md mx-auto transform -rotate-2">
+            <h3 className="text-2xl font-bold mb-4 font-heading text-pen-blue text-center">Result Sequence</h3>
+            <div className="text-center space-y-4 font-mono">
+              <p className="text-xl">Final Length: <span className="font-bold text-marker-red">{result?.length}</span></p>
+              <p className="text-3xl font-bold bg-white p-3 border-2 border-pencil wobbly-border-sm mx-4 shadow-hard-sm text-pencil">
+                LCS String: {result?.sequence || "None"}
+              </p>
+            </div>
+          </WobblyCard>
+        )}
 
         <div className="flex flex-col gap-6">
           <WobblyCard variant="yellow" decoration="tape" className="flex-1">

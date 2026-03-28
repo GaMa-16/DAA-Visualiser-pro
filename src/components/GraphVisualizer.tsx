@@ -188,11 +188,15 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ algorithm }) =
       for (let i = 0; i < n; i++) {
         for (let j = 0; j < n; j++) {
           if (dist[i][k] + dist[k][j] < dist[i][j]) {
+            const oldVal = dist[i][j];
             dist[i][j] = dist[i][k] + dist[k][j];
             newSteps.push({
               matrix: JSON.parse(JSON.stringify(dist)),
-              description: `Found shorter path between ${i} and ${j} via node ${k}. New distance: ${dist[i][j]}`,
-              k, i, j
+              description: `Found a shorter path! ${dist[i][k]} + ${dist[k][j]} < ${oldVal === Infinity ? '∞' : oldVal}. Updating cell to ${dist[i][j]}.`,
+              k, i, j,
+              updatedCell: [i, j],
+              oldVal,
+              newVal: dist[i][j]
             });
           }
         }
@@ -272,34 +276,67 @@ export const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ algorithm }) =
                 ))}
               </div>
             ) : (
-              <div className="bg-white p-6 wobbly-border-sm shadow-hard-lg max-w-full overflow-auto">
-                <h4 className="text-pencil font-heading mb-4 text-center">Distance Matrix (k={currentStep.k})</h4>
-                <table className="border-collapse">
+              <div className="bg-white p-6 wobbly-border-sm shadow-hard-lg max-w-full overflow-auto flex flex-col items-center">
+                <div className="text-center mb-6">
+                  <h4 className="text-pencil font-heading text-2xl">Distance Matrix (k={currentStep.k})</h4>
+                  {currentStep.k >= 0 && currentStep.k < nodes.length && (
+                    <p className="italic text-sm text-pencil/70 font-mono mt-2">"Using vertex {currentStep.k} as an intermediate point."</p>
+                  )}
+                </div>
+                <table className="border-collapse mb-6">
                   <thead>
                     <tr>
                       <th className="p-2 border-b-2 border-pencil"></th>
-                      {nodes.map(n => <th key={n.id} className="p-2 border-b-2 border-pencil font-heading text-marker-red">{n.id}</th>)}
+                      {nodes.map(n => <th key={n.id} className="p-2 border-b-2 border-pencil font-heading text-marker-red text-lg">{n.id}</th>)}
                     </tr>
                   </thead>
                   <tbody>
                     {currentStep.matrix?.map((row: any, i: number) => (
                       <tr key={i}>
-                        <td className="p-2 border-r-2 border-pencil font-heading text-marker-red">{i}</td>
-                        {row.map((val: any, j: number) => (
-                          <td 
-                            key={j} 
-                            className={`p-3 border border-pencil/20 text-center font-mono text-sm ${
-                              (currentStep.i === i && currentStep.j === j) ? 'bg-marker-red text-white' : 
-                              (currentStep.k === i || currentStep.k === j) ? 'bg-postit-yellow' : ''
-                            }`}
-                          >
-                            {val === Infinity ? '∞' : val}
-                          </td>
-                        ))}
+                        <td className="p-3 border-r-2 border-pencil font-heading text-marker-red text-lg">{i}</td>
+                        {row.map((val: any, j: number) => {
+                          const isUpdated = currentStep.updatedCell?.[0] === i && currentStep.updatedCell?.[1] === j;
+                          const isPivot = currentStep.k === i || currentStep.k === j;
+                          
+                          return (
+                            <td 
+                              key={j} 
+                              className={`p-4 border border-pencil/20 text-center font-mono text-base transition-colors ${
+                                isUpdated ? 'bg-emerald-100 shadow-hard-sm z-10 scale-105 border-emerald-300' : 
+                                isPivot ? 'bg-postit-yellow/50 font-bold' : ''
+                              }`}
+                            >
+                              {isUpdated ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <span className="line-through text-marker-red/70">
+                                    {currentStep.oldVal === Infinity ? '∞' : currentStep.oldVal}
+                                  </span>
+                                  <span className="text-emerald-700 font-bold text-lg">
+                                    {val === Infinity ? '∞' : val}
+                                  </span>
+                                </div>
+                              ) : (
+                                val === Infinity ? '∞' : val
+                              )}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                <div className="flex justify-center gap-3 flex-wrap mt-2">
+                  {Array.from({length: nodes.length + 2}).map((_, idx) => {
+                    const kVal = idx - 1;
+                    const isActive = currentStep.k === kVal;
+                    const isPast = currentStep.k > kVal;
+                    return (
+                      <div key={kVal} className={`w-10 h-10 flex items-center justify-center border-2 border-pencil wobbly-border-sm transition-all font-mono text-sm ${isActive ? 'bg-marker-red text-white scale-110 shadow-hard-sm font-bold' : isPast ? 'bg-pen-blue text-white' : 'bg-white text-pencil/40'}`}>
+                        {kVal === -1 ? '-1' : kVal === nodes.length ? '✓' : kVal}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>
